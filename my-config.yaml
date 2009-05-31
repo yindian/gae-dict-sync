@@ -1,0 +1,5 @@
+dictlist:
+  - name: JMdict English
+    url: http://ftp.monash.edu.au/pub/nihongo/JMdict_e.gz
+  - name: CC-CEDICT
+    url: http://www.mdbg.net/chindict/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz

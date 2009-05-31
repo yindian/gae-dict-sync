@@ -1,0 +1,15 @@
+application: gae-dict-sync
+version: 1
+runtime: python
+api_version: 1
+
+handlers:
+  - url: /tasks/dict-sync
+    script: dict-sync.py
+
+  - url: /tasks/check-update
+    script: dict-sync.py
+
+  - url: /
+    script: dict-sync.py
+

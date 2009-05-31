@@ -1,0 +1,8 @@
+cron:  
+- description: dict sync
+  url: /tasks/dict-sync  
+  schedule: every 40 seconds
+
+- description: check update
+  url: /tasks/check-update
+  schedule: every day 00:00
