@@ -27,7 +27,7 @@ class MyQueue():
   push=staticmethod(push)
 
   def pop(queue_name):
-    results = TaskMessage.gql("ORDER BY timestamp ASC LIMIT 1")
+    results = TaskMessage.gql("WHERE queue_name = :1 ORDER BY timestamp ASC LIMIT 1", queue_name)
     try:
       return results[0]
     except IndexError:
@@ -59,7 +59,7 @@ class DictionarySync(webapp.RequestHandler):
       self.response.out.write('No task in queue')
       return
     self.response.out.write('<p>queue=%s, url=%s, offset=%d, totallen=%d, timestamp=%s</p>' % (task.queue_name, task.url, task.offset, task.totallen, task.timestamp))
-    logging.info('Processing task %s, offset=%d, totallen=%d, timestamp=%s' % (task.queue_name, task.offset, task.totallen, task.timestamp))
+    logging.info('Processing task %s, engine=%s, offset=%d, totallen=%d, timestamp=%s' % (task.queue_name, dic['engine'], task.offset, task.totallen, task.timestamp))
     try:
       result = urlfetch.fetch(url=task.url,
                               method=urlfetch.GET,
@@ -90,6 +90,8 @@ class DictionarySync(webapp.RequestHandler):
     ret = processdata(dic['engine'], dic['name'], 
         task.offset, task.totallen, result.content, output)
     if ret:
+      task.offset += length
+      task.put()
       self.response.out.write('Done processing data.')
       self.response.out.write('<hr/>')
       for line in output:
@@ -97,6 +99,7 @@ class DictionarySync(webapp.RequestHandler):
         self.response.out.write('<br>')
     else:
       self.response.out.write('Failed processing data for ' + dic['engine'])
+      #task.delete()
 
 class CheckUpdate(webapp.RequestHandler):
   def get(self):
@@ -130,7 +133,7 @@ class MainPage(webapp.RequestHandler):
     config = get_my_config()
     self.response.out.write('<html><body>\n')
     for dic in config['dictlist']:
-      self.response.out.write('<p>name=%s<br>URL=%s</p>\n' % (dic['name'], dic['url']))
+      self.response.out.write('<p>name=%s<br>URL=%s<br>engine=%s</p>\n' % (dic['name'], dic['url'], dic['engine']))
     self.response.out.write('<hr/>')
     results = TaskMessage.gql("ORDER BY timestamp")
     for task in results:

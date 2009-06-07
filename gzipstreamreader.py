@@ -2,15 +2,11 @@
 import sys
 import logging
 import zlib
+import struct
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 
 class GzipStreamReader:
-	_buf = ''
-	_readptr = 0
-	_writeptr = 0
-	_decompress = None
-
 	def __init__(self, buf=''):
 		self.reset(buf)
 
@@ -19,6 +15,8 @@ class GzipStreamReader:
 		self._readptr = 0
 		self._writeptr = len(buf)
 		self._decompress = None
+		self._crc = zlib.crc32('')
+		self._size = 0
 
 	def _readbytes(self, bytes):
 		if self._readptr >= self._writeptr:
@@ -28,15 +26,15 @@ class GzipStreamReader:
 			bytes = self._writeptr - self._readptr
 		result = self._buf[self._readptr:self._readptr+bytes]
 		self._readptr += bytes
-		if self._readptr > 10240:
-			self._buf = self._buf[self._readptr:]
-			self._writeptr -= self._readptr
-			self._readptr = 0
 		return result
 
 	def feed(self, buf):
 		self._buf += buf
 		self._writeptr += len(buf)
+		if self._readptr > 10240:
+			self._buf = self._buf[self._readptr:]
+			self._writeptr -= self._readptr
+			self._readptr = 0
 
 	def read_header(self):
 		self._decompress = zlib.decompressobj(-zlib.MAX_WBITS)
@@ -86,10 +84,13 @@ class GzipStreamReader:
 			result.append(d_buf)
 			self._crc = zlib.crc32(d_buf, self._crc)
 			self._size += len(d_buf)
+		logging.info('gzip read: unused_data: ' + `self._decompress.unused_data`)
 		return ''.join(result)
 
 	def flush(self):
-		if self._decompress.unused_data != "":
+		logging.info('GzipStreamReader: flush invoked')
+		if self._decompress is not None\
+				and self._decompress.unused_data != "":
 			d_buf = self._decompress.flush()
 			self._crc = zlib.crc32(d_buf, self._crc)
 			self._size += len(d_buf)
@@ -104,20 +105,46 @@ class GzipStreamReader:
 				if size != self._size:
 					logging.error('Gzip Size %d != %d' % (
 						size, self._size))
+			self.reset()
 			return d_buf
 		else:
 			logging.warning('GzipStreamReader: nothing to flush')
 			return ''
 
+	def __getstate__(self):
+		result = [self._buf, self._readptr, self._writeptr]
+		if self._decompress is None:
+			result.append(None)
+		else:
+			result.append(self._decompress.unused_data)
+			logging.info('getstate: decompress: ' + `result[-1]`)
+		result.append(self._crc)
+		result.append(self._size)
+		return result
+
+	def __setstate__(self, state):
+		assert len(state) == 6
+		self._buf, self._readptr, self._writeptr = state[:3]
+		if state[3] is None:
+			self._decompress = None
+		else:
+			self._decompress = zlib.decompressobj(-zlib.MAX_WBITS)
+			#assert self._decompress.decompress(state[3]) == ''
+			#assert self._decompress.unused_data == state[3]
+			self.feed(state[3])
+			logging.info('setstate: decompress: ' + `state[3]`)
+		self._crc, self._size = state[4:]
+
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
 		sys.exit(0)
+	import pickle
 	if sys.platform == 'win32':
 		import os, msvcrt
 		msvcrt.setmode(sys.stdout.fileno(  ), os.O_BINARY)
 	f = open(sys.argv[1], 'rb')
 	gz = GzipStreamReader()
-	buf = f.read(10240)
+	buf = f.read(102400)
 	gz.feed(buf)
 	gz.read_header()
 	while True:
@@ -125,6 +152,8 @@ if __name__ == '__main__':
 		buf = f.read(10240)
 		if not buf:
 			break
+		dump = pickle.dumps(gz)
+		gz = pickle.loads(dump)
 		gz.feed(buf)
 	f.close()
 	sys.stdout.write(gz.flush())

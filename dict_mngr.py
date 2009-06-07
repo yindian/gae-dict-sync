@@ -61,7 +61,7 @@ def processdata(engine, dictname, offset, totallen, input, output):
     try:
       gz.read_header()
       dictdata.zipped = True
-    except:
+    except IOError:
       dictdata.zipped = False
       del gz
   else:
