@@ -6,7 +6,7 @@ import yaml
 import base64
 import datetime
 import urllib
-import xmllib
+import traceback
 
 import wsgiref.handlers
 from google.appengine.ext import db, webapp
@@ -102,9 +102,10 @@ class DictionarySync(webapp.RequestHandler):
         self.response.out.write('Failed processing data for ' + dic['name'])
         self.deletetask(task)
     except Exception, e:
-        logging.error('Failed processing data for %s: %s' % (dic['name'], `e`))
-        self.response.out.write('Failed processing data for %s: %s<br>' % (dic['name'], `e`))
-        self.deletetask(task)
+      traceback.print_exc()
+      logging.error('Failed processing data for %s: %s' % (dic['name'], `e`))
+      self.response.out.write('Failed processing data for %s: %s<br>' % (dic['name'], `e`))
+      self.deletetask(task)
 
   def deletetask(self, task):
     name = task.queue_name # queue_name == dic['name']

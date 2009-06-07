@@ -86,7 +86,6 @@ class GzipStreamReader:
 			result.append(d_buf)
 			self._crc = zlib.crc32(d_buf, self._crc)
 			self._size += len(d_buf)
-		logging.info('gzip read: unused_data: ' + `self._decompress.unused_data`)
 		return ''.join(result)
 
 	def flush(self):

@@ -19,6 +19,7 @@ class DictData(db.Model):
   zip_data = db.BlobProperty()
   eng_data = db.BlobProperty()
   out_data = db.ReferenceProperty(DataChunk, collection_name='out_data')
+  timestamp = db.DateTimeProperty(required=True, auto_now=True)
 
 def getfuncmap():
   functionmap = memcache.get("functionmap")
@@ -45,16 +46,21 @@ def processdata(engine, dictname, offset, totallen, input, output):
     else:
       dictdata = results[0]
   else:
+    assert results.count() == 2
     try:
-      assert results.count() == 2
       if results[0].ready:
         assert not results[1].ready
         dictdata = results[1]
       else:
         dictdata = results[0]
-    except:
-      logging.error('Unexpected dictdata: ' + `e`)
-      return False
+    except AssertionError: # both are ready, remove the older one
+      if results[0].timestamp < results[1].timestamp:
+        alt = results[0].alternative
+        results[0].delete()
+      else:
+        alt = results[1].alternative
+        results[1].delete()
+      dictdata = DictData(dict_name=dictname, alternative=alt, ready=False)
   if offset == 0:
     gz = GzipStreamReader()
     gz.feed(input)
@@ -69,14 +75,15 @@ def processdata(engine, dictname, offset, totallen, input, output):
       assert dictdata.zip_data is not None
       gz = pickle.loads(dictdata.zip_data)
       gz.feed(input)
+  flush = offset + len(input) >= totallen
   if dictdata.zipped:
-    if offset + len(input) < totallen:
+    if not flush:
       input = gz.read()
     else:
       input = gz.read() + gz.flush()
     dictdata.zip_data = pickle.dumps(gz)
   #dictdata is expected to be put in engine's function
-  return functionmap[engine](dictdata, offset, totallen, input, output)
+  return functionmap[engine](dictdata, flush, input, output)
 
 def initfuncmap(functionmap={}):
   import jmdict
