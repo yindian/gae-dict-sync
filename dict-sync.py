@@ -12,6 +12,7 @@ import wsgiref.handlers
 from google.appengine.ext import db, webapp
 from google.appengine.api import urlfetch, memcache
 from google.appengine.ext.webapp import template
+from dict_mngr import processdata
 
 class TaskMessage(db.Model):
   queue_name = db.StringProperty(required=True)
@@ -26,8 +27,11 @@ class MyQueue():
   push=staticmethod(push)
 
   def pop(queue_name):
-    results = TaskMessage.gql("ORDER BY timestamp ASC LIMIT 1") or [None]
-    return results[0]
+    results = TaskMessage.gql("ORDER BY timestamp ASC LIMIT 1")
+    try:
+      return results[0]
+    except IndexError:
+      return None
   pop=staticmethod(pop)
 
 
@@ -56,19 +60,36 @@ class DictionarySync(webapp.RequestHandler):
       return
     self.response.out.write('<p>queue=%s, url=%s, offset=%d, totallen=%d, timestamp=%s</p>' % (task.queue_name, task.url, task.offset, task.totallen, task.timestamp))
     try:
-      result = urlfetch.fetch(url=url,
+      result = urlfetch.fetch(url=task.url,
                               method=urlfetch.GET,
-                              headers={'Range': 'bytes=%d-' % (task.offset)})
+                              headers={'Range': 'bytes=%d-%d' % (task.offset, task.offset + 102399)})
       assert result.status_code == 206
       assert result.headers.has_key('Content-Range')
-    except DownloadError, e:
+      totallen = result.headers['Content-Range']
+      totallen = int(totallen[totallen.index('/')+1:])
+      assert totallen == task.totallen
+    except urlfetch.DownloadError, e:
       self.response.out.write(`e` + '<br>')
       pass
     except Exception, e:
       logging.error('Failed updating %s: %s' % (dic['name'], `e`))
       self.response.out.write('Failed updating %s: %s<br>' % (dic['name'], `e`))
-      task.delete()
+      #task.delete()
       return
+    length = len(result.content)
+    finished = False
+    if task.offset + length >= task.totallen:
+      assert task.offset + length == task.totallen
+      finished = True
+    if not finished:
+      self.response.out.write('Not finished. Len=%d, next offset=%d<br>' % (length, task.offset+length))
+    else:
+      self.response.out.write('Finished len=%d<br>' % (length))
+    ret = processdata(dic['engine'], task.offset, task.totallen, result.content)
+    if ret:
+      self.response.out.write('Done processing data.')
+    else:
+      self.response.out.write('Failed processing data for ' + dic['engine'])
 
 class CheckUpdate(webapp.RequestHandler):
   def get(self):
