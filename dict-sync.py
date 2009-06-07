@@ -75,7 +75,7 @@ class DictionarySync(webapp.RequestHandler):
     except Exception, e:
       logging.error('Failed updating %s: %s' % (dic['name'], `e`))
       self.response.out.write('Failed updating %s: %s<br>' % (dic['name'], `e`))
-      #task.delete()
+      self.deletetask(task)
       return
     length = len(result.content)
     finished = False
@@ -87,19 +87,31 @@ class DictionarySync(webapp.RequestHandler):
     else:
       self.response.out.write('Finished len=%d<br>' % (length))
     output = []
-    ret = processdata(dic['engine'], dic['name'], 
-        task.offset, task.totallen, result.content, output)
-    if ret:
-      task.offset += length
-      task.put()
-      self.response.out.write('Done processing data.')
-      self.response.out.write('<hr/>')
-      for line in output:
-        self.response.out.write(line)
-        self.response.out.write('<br>')
-    else:
-      self.response.out.write('Failed processing data for ' + dic['engine'])
-      #task.delete()
+    try:
+      ret = processdata(dic['engine'], dic['name'], 
+          task.offset, task.totallen, result.content, output)
+      if ret:
+        task.offset += length
+        task.put()
+        self.response.out.write('Done processing data.')
+        self.response.out.write('<hr/>')
+        for line in output:
+          self.response.out.write(line)
+          self.response.out.write('<br>')
+      else:
+        self.response.out.write('Failed processing data for ' + dic['name'])
+        self.deletetask(task)
+    except Exception, e:
+        logging.error('Failed processing data for %s: %s' % (dic['name'], `e`))
+        self.response.out.write('Failed processing data for %s: %s<br>' % (dic['name'], `e`))
+        self.deletetask(task)
+
+  def deletetask(self, task):
+    name = task.queue_name # queue_name == dic['name']
+    if not memcache.set("lastmod-"+name, ''):
+      logging.error("Memcache set failed for lastmod-%s." % (name))
+    task.delete()
+    self.response.out.write('Task deleted.<br>')
 
 class CheckUpdate(webapp.RequestHandler):
   def get(self):

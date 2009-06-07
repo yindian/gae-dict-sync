@@ -4,6 +4,8 @@ import logging
 import zlib
 import struct
 
+globaldic = {}
+
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 
 class GzipStreamReader:
@@ -116,8 +118,13 @@ class GzipStreamReader:
 		if self._decompress is None:
 			result.append(None)
 		else:
-			result.append(self._decompress.unused_data)
-			logging.info('getstate: decompress: ' + `result[-1]`)
+			dconame = 'decompressobj-%d-%d-%d-%d' % (
+					self._readptr,
+					self._writeptr,
+					self._crc,
+					self._size)
+			result.append(True)
+			globaldic[dconame] = self._decompress
 		result.append(self._crc)
 		result.append(self._size)
 		return result
@@ -128,12 +135,16 @@ class GzipStreamReader:
 		if state[3] is None:
 			self._decompress = None
 		else:
-			self._decompress = zlib.decompressobj(-zlib.MAX_WBITS)
-			#assert self._decompress.decompress(state[3]) == ''
-			#assert self._decompress.unused_data == state[3]
-			self.feed(state[3])
-			logging.info('setstate: decompress: ' + `state[3]`)
+			self._decompress = True
 		self._crc, self._size = state[4:]
+		if self._decompress == True:
+			dconame = 'decompressobj-%d-%d-%d-%d' % (
+					self._readptr,
+					self._writeptr,
+					self._crc,
+					self._size)
+			assert globaldic.has_key(dconame)
+			self._decompress = globaldic[dconame]
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
@@ -152,8 +163,6 @@ if __name__ == '__main__':
 		buf = f.read(10240)
 		if not buf:
 			break
-		dump = pickle.dumps(gz)
-		gz = pickle.loads(dump)
 		gz.feed(buf)
 	f.close()
 	sys.stdout.write(gz.flush())
