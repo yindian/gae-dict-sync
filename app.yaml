@@ -10,6 +10,9 @@ handlers:
   - url: /tasks/check-update
     script: dict-sync.py
 
+  - url: /download
+    script: dict-sync.py
+
   - url: /
     script: dict-sync.py
 

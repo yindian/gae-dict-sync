@@ -12,7 +12,7 @@ import wsgiref.handlers
 from google.appengine.ext import db, webapp
 from google.appengine.api import urlfetch, memcache
 from google.appengine.ext.webapp import template
-from dict_mngr import processdata
+from dict_mngr import processdata, getdatabydictname
 
 class TaskMessage(db.Model):
   queue_name = db.StringProperty(required=True)
@@ -153,10 +153,30 @@ class MainPage(webapp.RequestHandler):
       self.response.out.write('<p>queue=%s, url=%s, offset=%d, totallen=%d, timestamp=%s</p>' % (task.queue_name, task.url, task.offset, task.totallen, task.timestamp))
     self.response.out.write('</body></html>')
 
+class DownloadPage(webapp.RequestHandler):
+  def get(self):
+    try:
+      name = self.request.get('dict')
+      assert name
+    except:
+      self.response.set_status(500)
+      self.response.out.write('Invalid usage')
+      return
+    config = get_my_config()
+    for dic in config['dictlist']:
+      if name == dic['name']:
+        break
+    if name != dic['name']:
+      self.response.set_status(404)
+      self.response.out.write('Dictionary not found.')
+      return
+    self.response.out.write(getdatabydictname(name))
+
 def main():
   application = webapp.WSGIApplication([
     ('/tasks/dict-sync', DictionarySync),
     ('/tasks/check-update', CheckUpdate),
+    ('/download', DownloadPage),
     ('/', MainPage),
   ], debug=False)
   wsgiref.handlers.CGIHandler().run(application)

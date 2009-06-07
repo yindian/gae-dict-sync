@@ -1,6 +1,6 @@
 #!-*- coding:utf-8 -*-
 import logging
-from dict_mngr import DataChunk, DictData
+from dict_mngr import appenddata
 
 def processdata(dictdata, flush, input, output):
   lastline = dictdata.eng_data or ''
@@ -20,14 +20,6 @@ def processdata(dictdata, flush, input, output):
   else:
     dictdata.eng_data = ''
 
-  if dictdata.out_data:
-    lastchunk = dictdata.out_data
-  else:
-    lastchunk = DataChunk()
-    lastchunk.put()
-    dictdata.out_data = lastchunk
-  while lastchunk.next:
-    lastchunk = lastchunk.next
   result = []
   for line in lines:
     if line.startswith('#'):
@@ -57,25 +49,8 @@ def processdata(dictdata, flush, input, output):
     result.append('\\n'.join(mean))
     result.append('\n')
   result = ''.join(result)
-  data = lastchunk.data or ''
-  if len(data) + len(result) <= 1024000:
-    lastchunk.data = data + result
-  elif len(data) < 900000:
-    lastchunk.data = data + result[:1024000-len(data)]
-    newchunk = DataChunk()
-    newchunk.put()
-    lastchunk.next = newchunk
-    lastchunk.put()
-    lastchunk = newchunk
-    lastchunk.data = result[1024000-len(data):]
-  else:
-    newchunk = DataChunk()
-    newchunk.put()
-    lastchunk.next = newchunk
-    lastchunk.put()
-    lastchunk = newchunk
-    lastchunk.data = result
-  lastchunk.put()
+  appenddata(dictdata, result)
+
   if flush:
     dictdata.ready = True
   dictdata.put()

@@ -85,6 +85,66 @@ def processdata(engine, dictname, offset, totallen, input, output):
   #dictdata is expected to be put in engine's function
   return functionmap[engine](dictdata, flush, input, output)
 
+def getdatabydictname(dictname):
+  results = DictData.gql('WHERE dict_name = :1', dictname)
+  if results.count() == 0:
+    return None
+  elif results.count() == 1:
+    if results[0].ready:
+      dictdata = results[0]
+    else:
+      dictdata = results[0]
+      #return None
+  else:
+    assert results.count() == 2
+    if results[0].ready:
+      dictdata = results[0]
+    elif results[1].ready:
+      dictdata = results[1]
+    else:
+      return None
+  return retrievedata(dictdata)
+
+def retrievedata(dictdata):
+  chunk = dictdata.out_data
+  if not chunk:
+    return ''
+  result = [chunk.data]
+  while chunk.next:
+    chunk = chunk.next
+    result.append(chunk.data)
+  return ''.join(result)
+
+def appenddata(dictdata, content):
+  if dictdata.out_data:
+    lastchunk = dictdata.out_data
+  else:
+    lastchunk = DataChunk()
+    lastchunk.put()
+    dictdata.out_data = lastchunk
+  while lastchunk.next:
+    lastchunk = lastchunk.next
+
+  data = lastchunk.data or ''
+  if len(data) + len(content) <= 1024000:
+    lastchunk.data = data + content
+  elif len(data) < 900000:
+    lastchunk.data = data + content[:1024000-len(data)]
+    newchunk = DataChunk()
+    newchunk.put()
+    lastchunk.next = newchunk
+    lastchunk.put()
+    lastchunk = newchunk
+    lastchunk.data = content[1024000-len(data):]
+  else:
+    newchunk = DataChunk()
+    newchunk.put()
+    lastchunk.next = newchunk
+    lastchunk.put()
+    lastchunk = newchunk
+    lastchunk.data = content
+  lastchunk.put()
+
 def initfuncmap(functionmap={}):
   import jmdict
   functionmap['jmdict'] = jmdict.processdata

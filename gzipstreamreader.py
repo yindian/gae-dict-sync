@@ -106,6 +106,7 @@ class GzipStreamReader:
 				if size != self._size:
 					logging.error('Gzip Size %d != %d' % (
 						size, self._size))
+			del self._decompress
 			self.reset()
 			return d_buf
 		else:
@@ -142,8 +143,7 @@ class GzipStreamReader:
 					self._writeptr,
 					self._crc,
 					self._size)
-			assert globaldic.has_key(dconame)
-			self._decompress = globaldic[dconame]
+			self._decompress = globaldic.pop(dconame)
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:
