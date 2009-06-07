@@ -90,11 +90,11 @@ class GzipStreamReader:
 
 	def flush(self):
 		if self._decompress.unused_data != "":
-			d_buf = self._decompress.decompress(buf)
+			d_buf = self._decompress.flush()
 			self._crc = zlib.crc32(d_buf, self._crc)
 			self._size += len(d_buf)
 			if len(self._buf) >= 8:
-				crcsize = buf[-8:]
+				crcsize = self._buf[-8:]
 				crc, size = struct.unpack('<LL', crcsize)
 				if self._crc < 0:
 					self._crc += 1 << 32
@@ -110,7 +110,12 @@ class GzipStreamReader:
 			return ''
 
 if __name__ == '__main__':
-	f = open('temp/cedict_1_0_ts_utf-8_mdbg.txt.gz', 'rb')
+	if len(sys.argv) < 2:
+		sys.exit(0)
+	if sys.platform == 'win32':
+		import os, msvcrt
+		msvcrt.setmode(sys.stdout.fileno(  ), os.O_BINARY)
+	f = open(sys.argv[1], 'rb')
 	gz = GzipStreamReader()
 	buf = f.read(10240)
 	gz.feed(buf)

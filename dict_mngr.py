@@ -1,17 +1,11 @@
 #!-*- coding:utf-8 -*-
-import os
-import cgi
 import logging
-import yaml
-import base64
-import datetime
-import urllib
-import xmllib
+import pickle
 
-import wsgiref.handlers
 from google.appengine.ext import db, webapp
 from google.appengine.api import urlfetch, memcache
 from google.appengine.ext.webapp import template
+from gzipstreamreader import GzipStreamReader
 
 class DataChunk(db.Model):
   data = db.BlobProperty()
@@ -61,6 +55,27 @@ def processdata(engine, dictname, offset, totallen, input, output):
     except:
       logging.error('Unexpected dictdata: ' + `e`)
       return False
+  if offset == 0:
+    gz = GzipStreamReader()
+    gz.feed(input)
+    try:
+      gz.read_header()
+      dictdata.zipped = True
+    except:
+      dictdata.zipped = False
+      del gz
+  else:
+    if dictdata.zipped:
+      assert dictdata.zip_data is not None
+      gz = pickle.loads(dictdata.zip_data)
+      gz.feed(input)
+  if dictdata.zipped:
+    if offset + len(input) < totallen:
+      input = gz.read()
+    else:
+      input = gz.read() + gz.flush()
+    dictdata.zip_data = pickle.dumps(gz)
+  #dictdata is expected to be put in engine's function
   return functionmap[engine](dictdata, offset, totallen, input, output)
 
 def initfuncmap(functionmap={}):
