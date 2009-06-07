@@ -59,6 +59,7 @@ class DictionarySync(webapp.RequestHandler):
       self.response.out.write('No task in queue')
       return
     self.response.out.write('<p>queue=%s, url=%s, offset=%d, totallen=%d, timestamp=%s</p>' % (task.queue_name, task.url, task.offset, task.totallen, task.timestamp))
+    logging.info('Processing task %s, offset=%d, totallen=%d, timestamp=%s' % (task.queue_name, task.offset, task.totallen, task.timestamp))
     try:
       result = urlfetch.fetch(url=task.url,
                               method=urlfetch.GET,
@@ -85,9 +86,15 @@ class DictionarySync(webapp.RequestHandler):
       self.response.out.write('Not finished. Len=%d, next offset=%d<br>' % (length, task.offset+length))
     else:
       self.response.out.write('Finished len=%d<br>' % (length))
-    ret = processdata(dic['engine'], task.offset, task.totallen, result.content)
+    output = []
+    ret = processdata(dic['engine'], dic['name'], 
+        task.offset, task.totallen, result.content, output)
     if ret:
       self.response.out.write('Done processing data.')
+      self.response.out.write('<hr/>')
+      for line in output:
+        self.response.out.write(line)
+        self.response.out.write('<br>')
     else:
       self.response.out.write('Failed processing data for ' + dic['engine'])
 
@@ -125,7 +132,7 @@ class MainPage(webapp.RequestHandler):
     for dic in config['dictlist']:
       self.response.out.write('<p>name=%s<br>URL=%s</p>\n' % (dic['name'], dic['url']))
     self.response.out.write('<hr/>')
-    results = TaskMessage.gql("ORDER BY timestamp") or []
+    results = TaskMessage.gql("ORDER BY timestamp")
     for task in results:
       self.response.out.write('<p>queue=%s, url=%s, offset=%d, totallen=%d, timestamp=%s</p>' % (task.queue_name, task.url, task.offset, task.totallen, task.timestamp))
     self.response.out.write('</body></html>')
