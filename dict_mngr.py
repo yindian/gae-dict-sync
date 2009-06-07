@@ -21,7 +21,9 @@ class DictData(db.Model):
   dict_name = db.StringProperty(required=True)
   alternative = db.BooleanProperty(required=True)
   ready = db.BooleanProperty(required=True)
-  raw_data = db.ReferenceProperty(DataChunk, collection_name='raw_data')
+  zipped = db.BooleanProperty()
+  zip_data = db.BlobProperty()
+  eng_data = db.BlobProperty()
   out_data = db.ReferenceProperty(DataChunk, collection_name='out_data')
 
 def getfuncmap():
