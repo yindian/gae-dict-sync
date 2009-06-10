@@ -1,6 +1,7 @@
 #!-*- coding:utf-8 -*-
 import logging
 import pickle
+import zlib
 
 from google.appengine.ext import db, webapp
 from google.appengine.api import urlfetch, memcache
@@ -32,6 +33,7 @@ def getfuncmap():
     return functionmap
 
 def processdata(engine, dictname, offset, totallen, input, output):
+  logging.info('Enter processdata. offset=%d, totallen=%d, input len=%d, input crc=%d' % (offset, totallen, len(input), zlib.crc32(input)))
   functionmap = getfuncmap()
   if not functionmap.has_key(engine):
     logging.error('Engine %s not found in function map' % (engine,))
@@ -128,21 +130,18 @@ def appenddata(dictdata, content):
   data = lastchunk.data or ''
   if len(data) + len(content) <= 1024000:
     lastchunk.data = data + content
-  elif len(data) < 900000:
-    lastchunk.data = data + content[:1024000-len(data)]
-    newchunk = DataChunk()
-    newchunk.put()
-    lastchunk.next = newchunk
-    lastchunk.put()
-    lastchunk = newchunk
-    lastchunk.data = content[1024000-len(data):]
   else:
-    newchunk = DataChunk()
-    newchunk.put()
-    lastchunk.next = newchunk
-    lastchunk.put()
-    lastchunk = newchunk
-    lastchunk.data = content
+    if len(data) < 900000:
+      lastchunk.data = data + content[:1024000-len(data)]
+      content = content[1024000-len(data):]
+    while content:
+      newchunk = DataChunk()
+      newchunk.put()
+      lastchunk.next = newchunk
+      lastchunk.put()
+      lastchunk = newchunk # now a new chunk is alloc'ed
+      lastchunk.data = content[:1024000]
+      content = content[1024000:]
   lastchunk.put()
 
 def initfuncmap(functionmap={}):

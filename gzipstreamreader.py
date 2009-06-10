@@ -114,6 +114,10 @@ class GzipStreamReader:
 			return ''
 
 	def __getstate__(self):
+		if self._readptr > 100:
+			self._buf = self._buf[self._readptr:]
+			self._writeptr -= self._readptr
+			self._readptr = 0
 		result = [self._buf, self._readptr, self._writeptr]
 		if self._decompress is None:
 			result.append(None)
@@ -144,6 +148,10 @@ class GzipStreamReader:
 					self._crc,
 					self._size)
 			self._decompress = globaldic.pop(dconame)
+
+	def clean_dco_state():
+		globaldic.clear()
+	clean_dco_state=staticmethod(clean_dco_state)
 
 if __name__ == '__main__':
 	if len(sys.argv) < 2:

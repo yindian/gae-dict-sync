@@ -1,4 +1,5 @@
 #!-*- coding:utf-8 -*-
+import sys
 import logging
 from dict_mngr import appenddata
 
@@ -21,19 +22,22 @@ def processdata(dictdata, flush, input, output):
     dictdata.eng_data = ''
 
   result = []
-  for line in lines:
+  for line, linenum in zip(lines, xrange(1,sys.maxint)):
     if line.startswith('#'):
       continue
     ar = line.split('/')
     try:
       assert len(ar) > 1
     except:
-      logging.warning('CEDICT: error with line ' + line)
+      logging.warning('CEDICT: error with line %d: %s' % (linenum, line))
       raise
     if ar[-1] not in ('\n', '\r\n'):
-      logging.warning('CEDICT: error with line ' + line)
-      logging.info(`ar`)
-      continue
+      if flush and linenum == len(lines):
+        pass
+      else:
+        logging.warning('CEDICT: error no end line %d/%d: %s' % (linenum, len(lines), line))
+        logging.info(`ar`)
+        continue
     p = ar[0].find('[')
     if p > 0:
       words = ar[0][:p].strip().split()
@@ -43,6 +47,11 @@ def processdata(dictdata, flush, input, output):
       words = ar[0].strip().split()
       pronun = ''
       mean = ar[1:-1]
+    if len(words) == 2:
+      if words[0] == words[1]:
+        del words[1]
+    elif len(words) > 2:
+      raise Exception('Unexpected word count: ' + `words`)
     result.append('|'.join(words))
     result.append('\t')
     result.append('[%s]\\n' % (pronun,))
@@ -53,5 +62,9 @@ def processdata(dictdata, flush, input, output):
 
   if flush:
     dictdata.ready = True
-  dictdata.put()
+  try:
+    dictdata.put()
+  except:
+    logging.info('zip_data len=%d, eng_data len=%d' % (len(dictdata.zip_data), len(dictdata.eng_data)))
+    raise
   return True

@@ -13,6 +13,7 @@ from google.appengine.ext import db, webapp
 from google.appengine.api import urlfetch, memcache
 from google.appengine.ext.webapp import template
 from dict_mngr import processdata, getdatabydictname
+from gzipstreamreader import GzipStreamReader
 
 class TaskMessage(db.Model):
   queue_name = db.StringProperty(required=True)
@@ -63,7 +64,7 @@ class DictionarySync(webapp.RequestHandler):
     try:
       result = urlfetch.fetch(url=task.url,
                               method=urlfetch.GET,
-                              headers={'Range': 'bytes=%d-%d' % (task.offset, task.offset + 102399)})
+                              headers={'Range': 'bytes=%d-%d' % (task.offset, task.offset + 1000000)})
       assert result.status_code == 206
       assert result.headers.has_key('Content-Range')
       totallen = result.headers['Content-Range']
@@ -113,6 +114,7 @@ class DictionarySync(webapp.RequestHandler):
       logging.error("Memcache set failed for lastmod-%s." % (name))
     task.delete()
     self.response.out.write('Task deleted.<br>')
+    GzipStreamReader.clean_dco_state() # also clean gzip state
 
 class CheckUpdate(webapp.RequestHandler):
   def get(self):
@@ -170,6 +172,9 @@ class DownloadPage(webapp.RequestHandler):
       self.response.set_status(404)
       self.response.out.write('Dictionary not found.')
       return
+    self.response.headers['Content-Type'] = 'application/octet-stream'
+    self.response.headers['Content-Disposition']='attachment;filename="%s.txt"'\
+        % (name.encode('utf-8'),)
     self.response.out.write(getdatabydictname(name))
 
 def main():
